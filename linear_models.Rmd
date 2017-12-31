@@ -1,0 +1,163 @@
+---
+output:
+  html_document:
+    css: min.css
+    highlight: textmate
+    theme: null
+  pdf_document: default
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(prompt = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(cache = FALSE)
+knitr::opts_chunk$set(fig.width = 10)
+knitr::opts_chunk$set(fig.height = 4)
+knitr::opts_knit$set(root.dir = 'C:/Users/Documents/R/Project')
+knitr::opts_chunk$set(comment = NA)
+```
+
+```{r packages, echo=FALSE, results='hide'}
+list.packages = c("elasticnet", "lars", "MASS", "pls", "ggplot2", "mlbench", "lattice", "car", "knitr", "caret", "e1071", "DT", "gplots", "ROCR", "klaR", "corrplot", "AppliedPredictiveModeling", "data.table", "kableExtra", "VIM", "Amelia", "earth", "kernlab", "nnet", "mlbench", "plotmo", 'pROC')
+list.packages = unique(list.packages)
+install.pack = list.packages %in% installed.packages()
+if(length(list.packages[!install.pack]) > 0) 
+  install.p = install.packages(list.packages[!install.pack])
+lapply(list.packages, require, character.only=TRUE)
+rm(list.packages, install.pack)
+```
+
+##Data:
+```{r data}
+sick = read.csv('sick_final_.txt')
+y = sick['class_sick']$class_sick
+y = as.character(y)
+y[y==1] = "Yes"
+y[y==0] = "No"
+y = factor(y, levels=c("Yes","No"))
+data = sick[, -grep('class_sick', colnames(sick))]
+train_ind = createDataPartition(y, p=0.8, list=F)
+```
+
+##my_model:
+```{r my_model_}
+ctrl = trainControl(method="LGOCV", summaryFunction=defaultSummary, classProbs=TRUE,
+                     savePredictions=TRUE, number=5)
+zeroVar = nearZeroVar(data)
+length(zeroVar)
+data = data[ , -zeroVar]
+train = data[train_ind, ]
+test = data[-train_ind, ]
+y_train = y[train_ind]
+y_test = y[-train_ind]
+```
+
+```{r Logistic_Regr_1}
+rm(my_model, my_Roc, y_pred, my_Roc_test, y_pr)
+cat('#### LR ####')
+set.seed(1)
+my_model <- train(train, y=y_train, method="glm", metric="Kappa", trControl=ctrl)
+my_model
+confusionMatrix(data=my_model$pred$pred, reference=my_model$pred$obs)
+important_var <- caret::varImp(my_model) 
+important_var
+plot(important_var)
+
+#prediction
+cat('Summary Analysis of - Testing')
+y_pr = predict(my_model, newdata=test)
+confusionMatrix(data=y_pr, reference=y_test)
+```
+
+```{r LDA_1}
+rm(my_model, my_Roc, y_pred, my_Roc_test, y_pr)
+cat('#### Linear DA ####')
+set.seed(1)
+my_model <- train(train, y=y_train, method="lda", metric="Kappa", trControl=ctrl, preProc=c('center', 'scale'))
+my_model
+confusionMatrix(data=my_model$pred$pred, reference=my_model$pred$obs)
+#plot(my_model)
+important_var <- caret::varImp(my_model) 
+important_var
+plot(important_var)
+
+#prediction
+cat('Summary Analysis of - Testing')
+y_pr = predict(my_model, newdata=test)
+confusionMatrix(data=y_pr, reference=y_test)
+```
+
+```{r PLSDA_1}
+rm(my_model, my_Roc, y_pred, my_Roc_test, y_pr)
+cat('#### Partial LSDA ####')
+set.seed(1)
+glmnGrid = expand.grid(.ncomp = 1:dim(train)[2])
+my_model <- train(train, y=y_train, method="pls", metric="Kappa", trControl=ctrl, preProc=c('center', 'scale'), tuneGrid = glmnGrid)
+my_model
+plot(my_model)
+confusionMatrix(data=my_model$pred$pred, reference=my_model$pred$obs)
+important_var <- caret::varImp(my_model) 
+important_var
+plot(important_var)
+
+#prediction
+cat('Summary Analysis of - Testing')
+y_pr = predict(my_model, newdata=test)
+confusionMatrix(data=y_pr, reference=y_test)
+```
+
+```{r PM_1, fig.width=10}
+rm(my_model, my_Roc, y_pred, my_Roc_test, y_pr)
+cat('#### Penalized my_model ####')
+set.seed(1)
+glmnGrid <- expand.grid(.alpha = seq(0, 1, length = 10), .lambda = seq(.01, .5, length = 10))
+my_model <- train(train, y=y_train, method="glmnet", metric="Kappa", trControl=ctrl, preProc=c('center', 'scale'),             tuneGrid = glmnGrid)
+my_model
+plot(my_model)
+confusionMatrix(data=my_model$pred$pred, reference=my_model$pred$obs)
+important_var <- caret::varImp(my_model) 
+important_var
+plot(important_var)
+
+#prediction
+cat('Summary Analysis of - Testing')
+y_pr = predict(my_model, newdata=test)
+confusionMatrix(data=y_pr, reference=y_test)
+```
+
+```{r NSC_1}
+rm(my_model, my_Roc, y_pred, my_Roc_test, y_pr)
+cat('#### Nearest Shrunken Centroid ####')
+set.seed(1234)
+glmnGrid <- data.frame(.threshold = seq(0, 5, by=0.2))
+my_model <- train(train, y=y_train, method="pam", metric="Kappa", trControl=ctrl, preProc=c('center', 'scale'),             tuneGrid = glmnGrid)
+my_model
+plot(my_model)
+confusionMatrix(data=my_model$pred$pred, reference=my_model$pred$obs)
+important_var <- caret::varImp(my_model) 
+important_var
+plot(important_var)
+
+#prediction
+cat('Summary Analysis of - Testing')
+y_pr = predict(my_model, newdata=test)
+confusionMatrix(data=y_pr, reference=y_test)
+```
+
+
+
+
+
+
+
+
+
+
+
+
